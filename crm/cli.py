@@ -1,0 +1,133 @@
+import uuid
+from datetime import datetime, timedelta
+import click
+from .database import SessionLocal, Base, engine
+from .models import Client, Contract, Event
+
+
+# === Initialiser la base si besoin ===
+Base.metadata.create_all(engine)
+
+
+@click.group()
+def cli():
+    """CRM CLI - Gérer Clients, Contrats, Evénements"""
+    pass
+
+
+# === Commande : Créer un Client ===
+@cli.command()
+@click.option('--name', prompt="Nom du client")
+@click.option('--email', prompt="Email")
+@click.option('--phone', prompt="Téléphone")
+@click.option('--company', prompt="Entreprise")
+@click.option('--sales-contact', prompt="Contact commercial")
+def add_client(name, email, phone, company, sales_contact):
+    """Ajouter un nouveau client"""
+    session = SessionLocal()
+    client = Client(
+        name=name,
+        email=email,
+        phone=phone,
+        company=company,
+        created_at=datetime.utcnow(),
+        last_updated=datetime.utcnow(),
+        sales_contact=sales_contact
+    )
+    session.add(client)
+    session.commit()
+    click.echo(f"✅ Client créé : {client}")
+    session.close()
+
+
+# === Commande : Créer un Contrat ===
+@cli.command()
+@click.option('--client-id', prompt="ID du client")
+@click.option('--amount-total', prompt="Montant total", type=float)
+@click.option('--amount-remaining', prompt="Montant restant", type=float)
+@click.option('--status', prompt="Statut (ex: signed, pending)")
+def add_contract(client_id, amount_total, amount_remaining, status):
+    """Ajouter un contrat pour un client existant"""
+    session = SessionLocal()
+    client = session.get(Client, client_id)
+    if not client:
+        click.echo("❌ Client non trouvé.")
+        return
+
+    contract = Contract(
+        unique_id=str(uuid.uuid4()),
+        client_id=client.id,
+        sales_contact=client.sales_contact,
+        amount_total=amount_total,
+        amount_remaining=amount_remaining,
+        created_at=datetime.utcnow(),
+        status=status
+    )
+    session.add(contract)
+    session.commit()
+    click.echo(f"✅ Contrat créé : {contract}")
+    session.close()
+
+
+# === Commande : Créer un Événement ===
+@cli.command()
+@click.option('--contract-id', prompt="ID du contrat")
+@click.option('--start-days', prompt="Jours à partir d'aujourd'hui pour START", type=int)
+@click.option('--end-days', prompt="Jours à partir d'aujourd'hui pour END", type=int)
+@click.option('--support-contact', prompt="Contact support")
+@click.option('--location', prompt="Lieu")
+@click.option('--attendees', prompt="Nombre de participants", type=int)
+@click.option('--notes', prompt="Notes")
+def add_event(contract_id, start_days, end_days, support_contact, location, attendees, notes):
+    """Ajouter un événement pour un contrat existant"""
+    session = SessionLocal()
+    contract = session.get(Contract, contract_id)
+    if not contract:
+        click.echo("❌ Contrat non trouvé.")
+        return
+
+    client = contract.client
+
+    event = Event(
+        contract_id=contract.id,
+        client_name=client.name,
+        client_contact=f"{client.phone} | {client.email}",
+        event_date_start=datetime.utcnow() + timedelta(days=start_days),
+        event_date_end=datetime.utcnow() + timedelta(days=end_days),
+        support_contact=support_contact,
+        location=location,
+        attendees=attendees,
+        notes=notes
+    )
+    session.add(event)
+    session.commit()
+    click.echo(f"✅ Événement créé : {event}")
+    session.close()
+
+
+# === Commande : Lister Clients, Contrats, Événements ===
+@cli.command()
+def list_all():
+    """Lister tous les clients, contrats et événements"""
+    session = SessionLocal()
+    clients = session.query(Client).all()
+    contracts = session.query(Contract).all()
+    events = session.query(Event).all()
+
+    click.echo("\n=== Clients ===")
+    for c in clients:
+        click.echo(f"- {c.id}: {c.name} ({c.email})")
+
+    click.echo("\n=== Contrats ===")
+    for c in contracts:
+        click.echo(f"- {c.id}: {c.unique_id} (Client ID: {c.client_id}, Montant: {c.amount_total})")
+
+    click.echo("\n=== Événements ===")
+    for e in events:
+        click.echo(f"- {e.id}: {e.client_name} (Début: {e.event_date_start}, Lieu: {e.location})")
+
+    session.close()
+
+
+if __name__ == '__main__':
+    cli()
