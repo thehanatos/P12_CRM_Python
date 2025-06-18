@@ -1,6 +1,45 @@
 from .database import Base
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from argon2 import PasswordHasher
+
+
+ph = PasswordHasher()
+
+
+class Role(Base):
+    __tablename__ = "roles"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)  # ex: commercial, support, gestion
+
+    users = relationship("User", back_populates="role")
+
+    def __repr__(self):
+        return f"<Role(name={self.name})>"
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    employee_number = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role_id = Column(Integer, ForeignKey("roles.id"))
+
+    role = relationship("Role", back_populates="users")
+
+    def set_password(self, password: str):
+        self.hashed_password = ph.hash(password)
+
+    def verify_password(self, password: str) -> bool:
+        try:
+            return ph.verify(self.hashed_password, password)
+        except Exception:
+            return False
+
+    def __repr__(self):
+        return f"<User(name={self.name}, email={self.email}, role={self.role.name})>"
 
 
 # === Client ===
@@ -17,9 +56,11 @@ class Client(Base):
 
     # Contact commercial
     sales_contact = Column(String, nullable=True)
-
     # Relations
     contracts = relationship("Contract", back_populates="client")
+    # lien vers le User qui a créé le client
+    created_by_id = Column(Integer, ForeignKey("users.id"))
+    created_by = relationship("User")
 
     def __repr__(self):
         return f"<Client(name={self.name}, sales_contact={self.sales_contact})>"

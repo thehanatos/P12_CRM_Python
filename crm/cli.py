@@ -2,7 +2,10 @@ import uuid
 from datetime import datetime, timedelta
 import click
 from .database import SessionLocal, Base, engine
-from .models import Client, Contract, Event
+from .models import Client, Contract, Event, User, Role
+from argon2 import PasswordHasher
+
+ph = PasswordHasher()
 
 
 # === Initialiser la base si besoin ===
@@ -13,6 +16,47 @@ Base.metadata.create_all(engine)
 def cli():
     """CRM CLI - Gérer Clients, Contrats, Evénements"""
     pass
+
+
+# === Commande : Créer un Role ===
+@cli.command()
+@click.option('--name', prompt="Nom du rôle (commercial/support/gestion)")
+def add_role(name):
+    """Créer un nouveau rôle"""
+    session = SessionLocal()
+    role = Role(name=name)
+    session.add(role)
+    session.commit()
+    click.echo(f"✅ Rôle créé : {role}")
+    session.close()
+
+
+# === Commande : Créer un Utilisateur ===
+@cli.command()
+@click.option('--employee-number', prompt="Numéro d'employé")
+@click.option('--name', prompt="Nom")
+@click.option('--email', prompt="Email")
+@click.option('--password', prompt=True, hide_input=True, confirmation_prompt=True)
+@click.option('--role-id', prompt="ID du rôle")
+def add_user(employee_number, name, email, password, role_id):
+    """Créer un nouvel utilisateur"""
+    session = SessionLocal()
+    role = session.get(Role, role_id)
+    if not role:
+        click.echo("❌ Rôle introuvable.")
+        return
+
+    user = User(
+        employee_number=employee_number,
+        name=name,
+        email=email,
+        role=role
+    )
+    user.set_password(password)
+    session.add(user)
+    session.commit()
+    click.echo(f"✅ Utilisateur créé : {user}")
+    session.close()
 
 
 # === Commande : Créer un Client ===
