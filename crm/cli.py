@@ -4,6 +4,7 @@ import click
 from .database import SessionLocal, Base, engine
 from .models import Client, Contract, Event, User, Role
 from argon2 import PasswordHasher
+from crm.auth import authenticate_user, get_current_user, require_role
 
 ph = PasswordHasher()
 
@@ -16,6 +17,19 @@ Base.metadata.create_all(engine)
 def cli():
     """CRM CLI - Gérer Clients, Contrats, Evénements"""
     pass
+
+
+# === LOGIN ===
+@cli.command()
+@click.option('--email', prompt="Email")
+@click.option('--password', prompt=True, hide_input=True)
+def login(email, password):
+    """Connexion pour obtenir un token JWT"""
+    try:
+        authenticate_user(email, password)
+        click.echo("✅ Connecté ! Token sauvegardé localement.")
+    except Exception as e:
+        click.echo(str(e))
 
 
 # === Commande : Créer un Role ===
@@ -61,6 +75,7 @@ def add_user(employee_number, name, email, password, role_id):
 
 # === Commande : Créer un Client ===
 @cli.command()
+@require_role(["gestion"])  # vérifier qui a accès
 @click.option('--name', prompt="Nom du client")
 @click.option('--email', prompt="Email")
 @click.option('--phone', prompt="Téléphone")
@@ -68,6 +83,7 @@ def add_user(employee_number, name, email, password, role_id):
 @click.option('--sales-contact', prompt="Contact commercial")
 def add_client(name, email, phone, company, sales_contact):
     """Ajouter un nouveau client"""
+    user = get_current_user()
     session = SessionLocal()
     client = Client(
         name=name,
@@ -76,7 +92,7 @@ def add_client(name, email, phone, company, sales_contact):
         company=company,
         created_at=datetime.utcnow(),
         last_updated=datetime.utcnow(),
-        sales_contact=sales_contact
+        sales_contact=user['name']
     )
     session.add(client)
     session.commit()
@@ -149,6 +165,27 @@ def add_event(contract_id, start_days, end_days, support_contact, location, atte
     session.close()
 
 
+@cli.command()
+@require_role(["gestion"])  # Seuls les rôles "gestion" peuvent exécuter
+def list_users():
+    """Lister les utilisateurs (seulement pour 'gestion')"""
+    session = SessionLocal()
+    users = session.query(User).all()
+    for u in users:
+        click.echo(f"{u.id}: {u.name} ({u.email}) - {u.role.name if u.role else 'Aucun rôle'}")
+    session.close()
+
+
+@cli.command()
+def whoami():
+    """Affiche l'utilisateur connecté"""
+    try:
+        user = get_current_user()
+        click.echo(f"👤 Connecté en tant que : {user['name']} | rôle : {user['role']}")
+    except Exception as e:
+        click.echo(str(e))
+
+
 # === Commande : Lister Clients, Contrats, Événements ===
 @cli.command()
 def list_all():
@@ -171,6 +208,17 @@ def list_all():
         click.echo(f"- {e.id}: {e.client_name} (Début: {e.event_date_start}, Lieu: {e.location})")
 
     session.close()
+
+
+@cli.command()
+def logout():
+    """Déconnexion : supprime le token local"""
+    import os
+    try:
+        os.remove(".token")
+        click.echo("✅ Déconnecté(e).")
+    except FileNotFoundError:
+        click.echo("ℹ️  Aucun token trouvé : vous êtes déjà déconnecté(e).")
 
 
 if __name__ == '__main__':
