@@ -195,3 +195,4 @@ cython_debug/
 
 # Project files
 alembic.ini
+insert_test_data.py
