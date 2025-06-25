@@ -135,14 +135,24 @@ def add_contract(user):
     session.close()
 
 
-# === Commande : Modifier un Contrat ===
+# === Commande : Modifier un de ses Contrats (commercial) ou Tous (gestion)===
 @cli.command()
 @require_auth
-@require_role(["gestion"])
+@require_role(["gestion", "commercial"])
 def update_contract(user):
-    """Modifier un contrat existant"""
+    """Modifier un contrat existant (gestion = tous, commercial = uniquement les siens)"""
     session = SessionLocal()
-    contracts = session.query(Contract).all()
+    # Récupérer le nom du rôle
+    user_role = user.get('role')
+
+    if user_role == "gestion":
+        contracts = session.query(Contract).all()
+    elif user_role == "commercial":
+        contracts = session.query(Contract).filter_by(sales_contact=user.get('name')).all()
+    else:
+        click.echo("❌ Vous n'avez pas les droits pour modifier les contrats.")
+        return
+
     if not contracts:
         click.echo("❌ Aucun contrat trouvé.")
         return
@@ -155,16 +165,28 @@ def update_contract(user):
 
     contract = session.get(Contract, contract_id)
     if not contract:
-        click.echo("❌ Contrat non trouvé.")
+        click.echo("❌ Contrat non trouvé")
         return
 
-    click.echo(f"🔎 Contrat actuel : {contract}")
+    # Pour les commerciaux, vérifier qu'ils ne modifient que leurs contrats
+    if user_role == "commercial" and contract.sales_contact != user.get('name'):
+        click.echo("❌ Vous ne pouvez modifier que vos propres contrats.")
+        return
 
+    # Afficher les statuts disponibles (exemple)
+    VALID_STATUSES = ["new", "pending", "signed", "cancelled"]
+    click.echo(f"📌 Statuts disponibles : {', '.join(VALID_STATUSES)}")
+    click.echo(f"🔎 Contrat actuel : {contract}")
     # Prompts facultatifs — laisser vide pour ne pas modifier
     new_amount_total = click.prompt("Nouveau montant total", default=contract.amount_total, show_default=True)
     new_amount_remaining = click.prompt("Nouveau montant restant",
                                         default=contract.amount_remaining, show_default=True)
-    new_status = click.prompt("Nouveau statut (ex: signed, pending)", default=contract.status, show_default=True)
+
+    while True:
+        new_status = click.prompt("Nouveau statut", default=contract.status, show_default=True)
+        if new_status in VALID_STATUSES:
+            break
+        click.echo("❌ Statut invalide. Choisissez parmi : " + ", ".join(VALID_STATUSES))
 
     contract.amount_total = float(new_amount_total)
     contract.amount_remaining = float(new_amount_remaining)
