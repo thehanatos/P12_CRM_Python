@@ -57,6 +57,7 @@ def save_token(token: str):
 
 def load_token() -> str:
     """Charge le token JWT localement"""
+    print("🔍 Chargement du token...")
     if not os.path.exists(TOKEN_FILE):
         raise click.ClickException("🔑 Aucun token trouvé. Connectez-vous avec `login`.")
     with open(TOKEN_FILE, "r") as f:
@@ -92,3 +93,14 @@ def require_role(required_roles):
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def require_auth(f):
+    """Décorateur qui force l’authentification avant d’exécuter la fonction."""
+    import functools
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        user = get_current_user()  # lève une exception si pas connecté
+        return f(user, *args, **kwargs)
+    return wrapper
