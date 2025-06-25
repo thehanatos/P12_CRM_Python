@@ -308,6 +308,55 @@ def add_event(user):
     session.close()
 
 
+# === Commande : Modifier un Événement ===
+@cli.command()
+@require_auth
+@require_role(["gestion"])
+def update_event(user):
+    """Modifier un événement existant"""
+    session = SessionLocal()
+    events = session.query(Event).all()
+    if not events:
+        click.echo("❌ Aucun événement trouvé.")
+        return
+
+    click.echo("\n📅 Liste des événements :")
+    for e in events:
+        click.echo(f"  ID: {e.id} | Client: {e.client_name} | Lieu: {e.location}")
+
+    event_id = click.prompt("ID de l'événement à modifier", type=int)
+    event = session.get(Event, event_id)
+    if not event:
+        click.echo("❌ Événement non trouvé.")
+        return
+
+    # Prompts facultatifs — appuyer sur Entrée pour ne pas modifier
+    start_input = click.prompt("Jours à partir d'aujourd'hui nouvelle date de début", default="", show_default=False)
+    end_input = click.prompt("Jours à partir d'aujourd'hui nouvelle date de fin", default="", show_default=False)
+
+    new_start_days = int(start_input) if start_input.strip().isdigit() else None
+    new_end_days = int(end_input) if end_input.strip().isdigit() else None
+
+    new_support = click.prompt("Nouveau contact support", default=event.support_contact, show_default=True)
+    new_location = click.prompt("Nouveau lieu", default=event.location, show_default=True)
+    new_attendees = click.prompt("Nouveau nombre de participants", default=event.attendees, show_default=True)
+    new_notes = click.prompt("Nouvelles notes", default=event.notes, show_default=True)
+
+    if new_start_days is not None:
+        event.event_date_start = datetime.utcnow() + timedelta(days=new_start_days)
+    if new_end_days is not None:
+        event.event_date_end = datetime.utcnow() + timedelta(days=new_end_days)
+
+    event.support_contact = new_support
+    event.location = new_location
+    event.attendees = new_attendees
+    event.notes = new_notes
+
+    session.commit()
+    click.echo(f"✅ Événement modifié : {event}")
+    session.close()
+
+
 @cli.command()
 @require_role(["gestion"])
 def list_users():
