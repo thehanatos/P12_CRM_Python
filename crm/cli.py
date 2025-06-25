@@ -311,11 +311,21 @@ def add_event(user):
 # === Commande : Modifier un Événement ===
 @cli.command()
 @require_auth
-@require_role(["gestion"])
+@require_role(["gestion", "support"])
 def update_event(user):
     """Modifier un événement existant"""
     session = SessionLocal()
-    events = session.query(Event).all()
+    user_role = user.get('role')
+
+    # Filtrer les événements selon le rôle
+    if user_role == "gestion":
+        events = session.query(Event).all()
+    elif user_role == "support":
+        events = session.query(Event).filter_by(support_contact=user.get('name')).all()
+    else:
+        click.echo("❌ Vous n'avez pas les droits pour modifier les événements.")
+        return
+
     if not events:
         click.echo("❌ Aucun événement trouvé.")
         return
@@ -328,6 +338,10 @@ def update_event(user):
     event = session.get(Event, event_id)
     if not event:
         click.echo("❌ Événement non trouvé.")
+        return
+    # Pour le support, vérifier qu'ils ne modifient que leurs evenements
+    if user_role == "support" and event.support_contact != user.get('name'):
+        click.echo("⛔️ Vous ne pouvez modifier que les événements où vous êtes le contact support.")
         return
 
     # Prompts facultatifs — appuyer sur Entrée pour ne pas modifier
