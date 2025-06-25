@@ -4,7 +4,7 @@ import click
 from .database import SessionLocal, Base, engine
 from .models import Client, Contract, Event, User, Role
 from argon2 import PasswordHasher
-from crm.auth import authenticate_user, get_current_user, require_role
+from crm.auth import authenticate_user, get_current_user, require_role, require_auth
 
 ph = PasswordHasher()
 
@@ -34,10 +34,12 @@ def login(email, password):
 
 # === Commande : Créer un Role ===
 @cli.command()
-@click.option('--name', prompt="Nom du rôle (commercial/support/gestion)")
+@require_auth
+@require_role(["gestion"])
 def add_role(name):
     """Créer un nouveau rôle"""
     session = SessionLocal()
+    name = click.prompt("Nom du rôle (commercial/support/gestion)")
     role = Role(name=name)
     session.add(role)
     session.commit()
@@ -47,17 +49,19 @@ def add_role(name):
 
 # === Commande : Créer un Utilisateur ===
 @cli.command()
-@click.option('--employee-number', prompt="Numéro d'employé")
-@click.option('--name', prompt="Nom")
-@click.option('--email', prompt="Email")
-@click.option('--password', prompt=True, hide_input=True, confirmation_prompt=True)
-@click.option('--role-id', prompt="ID du rôle")
-def add_user(employee_number, name, email, password, role_id):
+@require_auth
+@require_role(["gestion"])
+def add_user(user):
     """Créer un nouvel utilisateur"""
+    employee_number = click.prompt("Numéro d'employé")
+    name = click.prompt("Nom")
+    email = click.prompt("Email")
+    password = click.prompt("Mot de passe", hide_input=True, confirmation_prompt=True)
+    role_name = click.prompt("Rôle (commercial / support / gestion)")
     session = SessionLocal()
-    role = session.get(Role, role_id)
+    role = session.query(Role).filter_by(name=role_name).first()
     if not role:
-        click.echo("❌ Rôle introuvable.")
+        click.echo(f"❌ Rôle '{role_name}' introuvable.")
         return
 
     user = User(
@@ -75,15 +79,15 @@ def add_user(employee_number, name, email, password, role_id):
 
 # === Commande : Créer un Client ===
 @cli.command()
-@require_role(["gestion"])  # vérifier qui a accès
-@click.option('--name', prompt="Nom du client")
-@click.option('--email', prompt="Email")
-@click.option('--phone', prompt="Téléphone")
-@click.option('--company', prompt="Entreprise")
-@click.option('--sales-contact', prompt="Contact commercial")
-def add_client(name, email, phone, company, sales_contact):
-    """Ajouter un nouveau client"""
-    user = get_current_user()
+@require_auth
+@require_role(["commercial"])
+def add_client(user):
+    """Ajouter un nouveau client (auth requis)."""
+
+    name = click.prompt("Nom du client")
+    email = click.prompt("Email")
+    phone = click.prompt("Téléphone")
+    company = click.prompt("Entreprise")
     session = SessionLocal()
     client = Client(
         name=name,
@@ -102,12 +106,14 @@ def add_client(name, email, phone, company, sales_contact):
 
 # === Commande : Créer un Contrat ===
 @cli.command()
-@click.option('--client-id', prompt="ID du client")
-@click.option('--amount-total', prompt="Montant total", type=float)
-@click.option('--amount-remaining', prompt="Montant restant", type=float)
-@click.option('--status', prompt="Statut (ex: signed, pending)")
-def add_contract(client_id, amount_total, amount_remaining, status):
+@require_auth
+@require_role(["gestion"])
+def add_contract(user):
     """Ajouter un contrat pour un client existant"""
+    client_id = click.prompt("ID du client")
+    amount_total = click.prompt("Montant total")
+    amount_remaining = click.prompt("Montant restant")
+    status = click.prompt("Statut (ex: signed, pending)")
     session = SessionLocal()
     client = session.get(Client, client_id)
     if not client:
@@ -131,15 +137,17 @@ def add_contract(client_id, amount_total, amount_remaining, status):
 
 # === Commande : Créer un Événement ===
 @cli.command()
-@click.option('--contract-id', prompt="ID du contrat")
-@click.option('--start-days', prompt="Jours à partir d'aujourd'hui pour START", type=int)
-@click.option('--end-days', prompt="Jours à partir d'aujourd'hui pour END", type=int)
-@click.option('--support-contact', prompt="Contact support")
-@click.option('--location', prompt="Lieu")
-@click.option('--attendees', prompt="Nombre de participants", type=int)
-@click.option('--notes', prompt="Notes")
-def add_event(contract_id, start_days, end_days, support_contact, location, attendees, notes):
+@require_auth
+@require_role(["commercial"])
+def add_event(user):
     """Ajouter un événement pour un contrat existant"""
+    contract_id = click.prompt("ID du contrat")
+    start_days = click.prompt("Jours à partir d'aujourd'hui pour START")
+    end_days = click.prompt("Jours à partir d'aujourd'hui pour END")
+    support_contact = click.prompt("Contact support")
+    location = click.prompt("Lieu")
+    attendees = click.prompt("Nombre de participants")
+    notes = click.prompt("Notes")
     session = SessionLocal()
     contract = session.get(Contract, contract_id)
     if not contract:
@@ -166,7 +174,7 @@ def add_event(contract_id, start_days, end_days, support_contact, location, atte
 
 
 @cli.command()
-@require_role(["gestion"])  # Seuls les rôles "gestion" peuvent exécuter
+@require_role(["gestion"])
 def list_users():
     """Lister les utilisateurs (seulement pour 'gestion')"""
     session = SessionLocal()
