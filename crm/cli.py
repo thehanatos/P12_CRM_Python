@@ -135,6 +135,47 @@ def add_contract(user):
     session.close()
 
 
+# === Commande : Modifier un Contrat ===
+@cli.command()
+@require_auth
+@require_role(["gestion"])
+def update_contract(user):
+    """Modifier un contrat existant"""
+    session = SessionLocal()
+    contracts = session.query(Contract).all()
+    if not contracts:
+        click.echo("❌ Aucun contrat trouvé.")
+        return
+
+    click.echo("\n📄 Liste des contrats :")
+    for c in contracts:
+        click.echo(f"  ID: {c.id} | Client ID: {c.client_id} | Montant: {c.amount_total} | Statut: {c.status}")
+
+    contract_id = click.prompt("ID du contrat à modifier")
+
+    contract = session.get(Contract, contract_id)
+    if not contract:
+        click.echo("❌ Contrat non trouvé.")
+        return
+
+    click.echo(f"🔎 Contrat actuel : {contract}")
+
+    # Prompts facultatifs — laisser vide pour ne pas modifier
+    new_amount_total = click.prompt("Nouveau montant total", default=contract.amount_total, show_default=True)
+    new_amount_remaining = click.prompt("Nouveau montant restant",
+                                        default=contract.amount_remaining, show_default=True)
+    new_status = click.prompt("Nouveau statut (ex: signed, pending)", default=contract.status, show_default=True)
+
+    contract.amount_total = float(new_amount_total)
+    contract.amount_remaining = float(new_amount_remaining)
+    contract.status = new_status
+    contract.last_updated = datetime.utcnow()
+
+    session.commit()
+    click.echo(f"✅ Contrat mis à jour : {contract}")
+    session.close()
+
+
 # === Commande : Créer un Événement ===
 @cli.command()
 @require_auth
