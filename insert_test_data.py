@@ -41,21 +41,21 @@ users = [
         name="Alice Commercial",
         email="alice@crm.com",
         role=role_sales,
-        hashed_password=ph.hash("passWord123456")
+        hashed_password=ph.hash("password123")
     ),
     User(
         employee_number="EMP002",
         name="Bob Support",
         email="bob@crm.com",
         role=role_support,
-        hashed_password=ph.hash("passWord123456")
+        hashed_password=ph.hash("password123")
     ),
     User(
         employee_number="EMP003",
         name="Charlie Manager",
         email="charlie@crm.com",
         role=role_management,
-        hashed_password=ph.hash("passWord123456")
+        hashed_password=ph.hash("password123")
     ),
 ]
 
