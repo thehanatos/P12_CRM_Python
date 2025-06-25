@@ -77,6 +77,78 @@ def add_user(user):
     session.close()
 
 
+# === Commande : Modifier un Utilisateur ===
+@cli.command()
+@require_auth
+@require_role(["gestion"])
+def update_user(user):
+    """Modifier un utilisateur"""
+    session = SessionLocal()
+
+    users = session.query(User).all()
+    click.echo("\n📄 Liste des utilisateurs :")
+    for u in users:
+        click.echo(f"  ID: {u.id} | Numéro: {u.employee_number} | Nom: {u.name} | Rôle: {u.role.name}")
+
+    user_id = click.prompt("ID de l'utilisateur à modifier", type=int)
+    target_user = session.get(User, user_id)
+    if not target_user:
+        click.echo("❌ Utilisateur non trouvé")
+        return
+
+    # Prompts optionnels : laisser vide pour ne pas modifier
+    new_email = click.prompt("Nouveau email ", default="", show_default=False)
+    new_name = click.prompt("Nouveau nom ", default="", show_default=False)
+    role_name = click.prompt("Nouveau rôle (commercial / support / gestion) ", default="", show_default=False)
+    new_password = click.prompt("Nouveau mot de passe ",
+                                hide_input=True, confirmation_prompt=True, default="", show_default=False)
+
+    if new_email:
+        target_user.email = new_email
+    if new_name:
+        target_user.name = new_name
+    if role_name:
+        role = session.query(Role).filter_by(name=role_name).first()
+        if not role:
+            click.echo("❌ Rôle introuvable.")
+            return
+        target_user.role = role
+    if new_password:
+        target_user.set_password(new_password)
+
+    session.commit()
+    click.echo(f"✅ Utilisateur modifié : {target_user}")
+    session.close()
+
+
+# === Commande : Supprimer un Utilisateur ===
+@cli.command()
+@require_auth
+@require_role(["gestion"])
+def delete_user(user):
+    """Supprimer un user """
+    session = SessionLocal()
+    users = session.query(User).all()
+    click.echo("\n📄 Liste des utilisateurs :")
+    for u in users:
+        click.echo(f"  ID: {u.id} | Numéro: {u.employee_number} | Nom: {u.name} | Rôle: {u.role.name}")
+
+    user_id = click.prompt("ID de l'utilisateur à supprimer", type=int)
+    target_user = session.get(User, user_id)
+    if not target_user:
+        click.echo("❌ Utilisateur non trouvé")
+        return
+
+    if not click.confirm(f"⚠️ Êtes-vous sûr de vouloir supprimer l'utilisateur '{target_user.name}' ?", default=False):
+        click.echo("❌ Suppression annulée.")
+        return
+
+    session.delete(target_user)
+    session.commit()
+    click.echo(f"✅ Utilisateur supprimé : {target_user}")
+    session.close()
+
+
 # === Commande : Créer un Client ===
 @cli.command()
 @require_auth
