@@ -35,8 +35,8 @@ def login(email, password):
         click.echo(str(e))
 
 
-# Générer le numero employé
 def generate_next_employee_number(session):
+    """Génération automatique pour le numéro d'employé"""
     existing_numbers = session.query(User.employee_number).all()
     prefix = "EMP"
     max_num = 0
@@ -55,6 +55,7 @@ def generate_next_employee_number(session):
 
 
 def prompt_until_valid(prompt_text, validator_func, error_msg="Entrée invalide."):
+    """Validation des saisies de l'utilisateur"""
     while True:
         value = click.prompt(prompt_text, default="", show_default=False)
         if validator_func(value):
