@@ -182,11 +182,16 @@ def add_client(user):
 @require_role(["gestion"])
 def add_contract(user):
     """Ajouter un contrat pour un client existant"""
+    session = SessionLocal()
+    clients = session.query(Client).all()
+    click.echo("\n=== Clients ===")
+    for c in clients:
+        click.echo(f"- {c.id}: {c.name} ({c.email})")
     client_id = click.prompt("ID du client")
     amount_total = click.prompt("Montant total")
     amount_remaining = click.prompt("Montant restant")
     status = click.prompt("Statut (ex: signed, pending)")
-    session = SessionLocal()
+
     client = session.get(Client, client_id)
     if not client:
         click.echo("❌ Client non trouvé.")
@@ -276,32 +281,70 @@ def update_contract(user):
 @require_role(["commercial"])
 def add_event(user):
     """Ajouter un événement pour un contrat existant"""
-    contract_id = click.prompt("ID du contrat")
-    start_days = click.prompt("Jours à partir d'aujourd'hui pour START")
-    end_days = click.prompt("Jours à partir d'aujourd'hui pour END")
-    support_contact = click.prompt("Contact support")
-    location = click.prompt("Lieu")
-    attendees = click.prompt("Nombre de participants")
-    notes = click.prompt("Notes")
     session = SessionLocal()
-    contract = session.get(Contract, contract_id)
-    if not contract:
-        click.echo("❌ Contrat non trouvé.")
+
+    # Récupérer les contrats signés du commercial
+    contracts = session.query(Contract).filter_by(
+        status="signed", sales_contact=user.get("name")
+    ).all()
+
+    if not contracts:
+        click.echo("❌ Aucun contrat signé trouvé pour vous.")
+        session.close()
         return
 
-    client = contract.client
+    click.echo("\n📄 Contrats signés disponibles :")
+    for c in contracts:
+        click.echo(f"  ID: {c.id} | Client: {c.client.name} | Montant: {c.amount_total} €")
 
+    contract_id = click.prompt("ID du contrat", type=int)
+    contract = session.query(Contract).filter_by(
+        id=contract_id, status="signed", sales_contact=user.get("name")
+    ).first()
+
+    if not contract:
+        click.echo("❌ Contrat introuvable ou non autorisé.")
+        session.close()
+        return
+
+    support_users = session.query(User).join(Role).filter(Role.name == "support").all()
+
+    if not support_users:
+        click.echo("❌ Aucun utilisateur avec le rôle 'support' trouvé.")
+        session.close()
+        return
+
+    click.echo("\n🧑‍💻 Contacts support disponibles :")
+    for su in support_users:
+        click.echo(f"  ID: {su.id} | Nom: {su.name} | Email: {su.email}")
+
+    support_contact_id = click.prompt("ID du contact support", type=int)
+    support_user = next((u for u in support_users if u.id == support_contact_id), None)
+
+    if not support_user:
+        click.echo("❌ Contact support invalide.")
+        session.close()
+        return
+
+    start_days = click.prompt("Jours à partir d'aujourd'hui pour START", type=int)
+    end_days = click.prompt("Jours à partir d'aujourd'hui pour END", type=int)
+    location = click.prompt("Lieu")
+    attendees = click.prompt("Nombre de participants", type=int)
+    notes = click.prompt("Notes")
+
+    client = contract.client
     event = Event(
         contract_id=contract.id,
         client_name=client.name,
         client_contact=f"{client.phone} | {client.email}",
         event_date_start=datetime.utcnow() + timedelta(days=start_days),
         event_date_end=datetime.utcnow() + timedelta(days=end_days),
-        support_contact=support_contact,
+        support_contact=support_user.name,
         location=location,
         attendees=attendees,
         notes=notes
     )
+
     session.add(event)
     session.commit()
     click.echo(f"✅ Événement créé : {event}")
@@ -368,6 +411,24 @@ def update_event(user):
 
     session.commit()
     click.echo(f"✅ Événement modifié : {event}")
+    session.close()
+
+
+# === Commande : Afficher Événements sans support ===
+@cli.command()
+@require_role(["gestion"])
+def list_events_no_support():
+    """Lister les évènements sans support"""
+    session = SessionLocal()
+    events = session.query(Event).filter(Event.support_contact.is_(None)).all()
+
+    if not events:
+        click.echo("✅ Tous les événements ont un support assigné.")
+    else:
+        click.echo("\n📅 Événements sans support :")
+        for e in events:
+            click.echo(f"- ID: {e.id} | Client: {e.client_name} | Début: {e.event_date_start} | Lieu: {e.location}")
+
     session.close()
 
 
