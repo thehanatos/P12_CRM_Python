@@ -481,6 +481,29 @@ def list_events_no_support():
     session.close()
 
 
+# === Commande : Afficher Événements pour support ===
+@cli.command()
+@require_auth
+@require_role(["support"])
+def list_events_support(user):
+    """Lister les évènements assignés à l'utilisateur support"""
+    session = SessionLocal()
+
+    # Récupération des événements pour ce support uniquement
+    events = session.query(Event).filter_by(support_contact=user.get('name')).all()
+
+    if not events:
+        click.echo("❌ Aucun événement trouvé pour vous.")
+        session.close()
+        return
+
+    click.echo("\n📅 Liste des événements où vous êtes contact support :")
+    for e in events:
+        click.echo(f"  ID: {e.id} | Client: {e.client_name} | Lieu: {e.location} | Début: {e.event_date_start}")
+
+    session.close()
+
+
 @cli.command()
 @require_role(["gestion"])
 def list_users():
