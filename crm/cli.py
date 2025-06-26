@@ -318,13 +318,24 @@ def add_event(user):
     for su in support_users:
         click.echo(f"  ID: {su.id} | Nom: {su.name} | Email: {su.email}")
 
-    support_contact_id = click.prompt("ID du contact support", type=int)
-    support_user = next((u for u in support_users if u.id == support_contact_id), None)
+    support_contact_input = click.prompt("ID du contact support (laisser vide si aucun)",
+                                         default="", show_default=False)
 
-    if not support_user:
-        click.echo("❌ Contact support invalide.")
-        session.close()
-        return
+    if support_contact_input.strip() == "":
+        support_contact_name = None
+    else:
+        try:
+            support_contact_id = int(support_contact_input)
+            support_user = next((u for u in support_users if u.id == support_contact_id), None)
+            if not support_user:
+                click.echo("❌ Contact support invalide.")
+                session.close()
+                return
+            support_contact_name = support_user.name
+        except ValueError:
+            click.echo("❌ Veuillez entrer un identifiant valide ou laisser vide.")
+            session.close()
+            return
 
     start_days = click.prompt("Jours à partir d'aujourd'hui pour START", type=int)
     end_days = click.prompt("Jours à partir d'aujourd'hui pour END", type=int)
@@ -339,7 +350,7 @@ def add_event(user):
         client_contact=f"{client.phone} | {client.email}",
         event_date_start=datetime.utcnow() + timedelta(days=start_days),
         event_date_end=datetime.utcnow() + timedelta(days=end_days),
-        support_contact=support_user.name,
+        support_contact=support_contact_name,
         location=location,
         attendees=attendees,
         notes=notes
