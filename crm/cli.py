@@ -33,6 +33,25 @@ def login(email, password):
         click.echo(str(e))
 
 
+# Générer le numero employé
+def generate_next_employee_number(session):
+    existing_numbers = session.query(User.employee_number).all()
+    prefix = "EMP"
+    max_num = 0
+
+    for (emp_num,) in existing_numbers:
+        if emp_num and emp_num.startswith(prefix):
+            try:
+                num_part = int(emp_num.replace(prefix, ""))
+                if num_part > max_num:
+                    max_num = num_part
+            except ValueError:
+                continue  # Ignore non-conforming formats
+
+    next_number = f"{prefix}{str(max_num + 1).zfill(3)}"
+    return next_number
+
+
 # === Commande : Créer un Role ===
 @cli.command()
 @require_auth
@@ -60,7 +79,8 @@ def add_user(user):
     click.echo("\n📄 Liste des utilisateurs :")
     for u in users:
         click.echo(f"  ID: {u.id} | N°: {u.employee_number} | Nom: {u.name} | Rôle: {u.role.name} | Email: {u.email}")
-    employee_number = click.prompt("N° d'employé")
+
+    employee_number = generate_next_employee_number(session)
     name = click.prompt("Nom")
     email = click.prompt("Email")
     password = click.prompt("Mot de passe", hide_input=True, confirmation_prompt=True)
