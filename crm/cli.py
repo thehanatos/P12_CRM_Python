@@ -182,6 +182,50 @@ def add_client(user):
     session.close()
 
 
+# === Commande : Modifier un Client ===
+@cli.command()
+@require_auth
+@require_role(["commercial"])
+def update_client(user):
+    """Modifier un client existant (commercial = uniquement les siens)"""
+    session = SessionLocal()
+    clients = session.query(Client).filter_by(sales_contact=user.get('name')).all()
+
+    if not clients:
+        click.echo("❌ Aucun client ne vous est assigné.")
+        session.close()
+        return
+
+    click.echo("\n📋 Liste de vos clients :")
+    for c in clients:
+        click.echo(f"  ID: {c.id} | Nom: {c.name} | Email: {c.email} | Téléphone: {c.phone}")
+
+    client_id = click.prompt("ID du client à modifier", type=int)
+    client = session.query(Client).filter_by(id=client_id, sales_contact=user.get('name')).first()
+
+    if not client:
+        click.echo("❌ Client introuvable ou non autorisé.")
+        session.close()
+        return
+
+    click.echo(f"\n🔧 Modification du client : {client.name}")
+    # Prompts avec valeur par défaut pour modification
+    new_name = click.prompt("Nom", default=client.name, show_default=True)
+    new_email = click.prompt("Email", default=client.email, show_default=True)
+    new_phone = click.prompt("Téléphone", default=client.phone, show_default=True)
+    new_company = click.prompt("Entreprise", default=client.company, show_default=True)
+
+    client.name = new_name
+    client.email = new_email
+    client.phone = new_phone
+    client.company = new_company
+    client.last_updated = datetime.utcnow()
+
+    session.commit()
+    click.echo(f"✅ Client mis à jour : {client.name}")
+    session.close()
+
+
 # === Commande : Créer un Contrat ===
 @cli.command()
 @require_auth
