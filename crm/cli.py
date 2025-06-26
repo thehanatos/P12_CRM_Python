@@ -6,6 +6,8 @@ from .models import Client, Contract, Event, User, Role
 from argon2 import PasswordHasher
 from crm.auth import authenticate_user, get_current_user, require_role, require_auth
 from sqlalchemy import or_
+from tests.validators import check_email, check_phone, check_role, check_company
+from tests.validators import check_number, check_status, check_amount
 
 ph = PasswordHasher()
 
@@ -46,10 +48,18 @@ def generate_next_employee_number(session):
                 if num_part > max_num:
                     max_num = num_part
             except ValueError:
-                continue  # Ignore non-conforming formats
+                continue
 
     next_number = f"{prefix}{str(max_num + 1).zfill(3)}"
     return next_number
+
+
+def prompt_until_valid(prompt_text, validator_func, error_msg="Entrée invalide."):
+    while True:
+        value = click.prompt(prompt_text, default="", show_default=False)
+        if validator_func(value):
+            return value
+        click.echo(f"❌ {error_msg}")
 
 
 # === Commande : Créer un Role ===
@@ -59,8 +69,8 @@ def generate_next_employee_number(session):
 def add_role(name):
     """Créer un nouveau rôle"""
     session = SessionLocal()
-    name = click.prompt("Nom du rôle (commercial/support/gestion)")
-    role = Role(name=name)
+    role_name = prompt_until_valid("Role", check_role, "Role invalide")
+    role = Role(name=role_name)
     session.add(role)
     session.commit()
     click.echo(f"✅ Rôle créé : {role}")
@@ -82,9 +92,9 @@ def add_user(user):
 
     employee_number = generate_next_employee_number(session)
     name = click.prompt("Nom")
-    email = click.prompt("Email")
+    email = prompt_until_valid("Email", check_email, "Email invalide")
     password = click.prompt("Mot de passe", hide_input=True, confirmation_prompt=True)
-    role_name = click.prompt("Rôle (commercial / support / gestion)")
+    role_name = prompt_until_valid("Role commercial/gestion/support", check_role, "Role invalide")
     role = session.query(Role).filter_by(name=role_name).first()
     if not role:
         click.echo(f"❌ Rôle '{role_name}' introuvable.")
@@ -116,16 +126,17 @@ def update_user(user):
     for u in users:
         click.echo(f"  ID: {u.id} | Numéro: {u.employee_number} | Nom: {u.name} | Rôle: {u.role.name}")
 
-    user_id = click.prompt("ID de l'utilisateur à modifier", type=int)
+    user_id = prompt_until_valid("ID de l'utilisateur à modifier", check_number, "ID invalide")
     target_user = session.get(User, user_id)
     if not target_user:
         click.echo("❌ Utilisateur non trouvé")
         return
 
     # Prompts optionnels : laisser vide pour ne pas modifier
-    new_email = click.prompt("Nouveau email ", default="", show_default=False)
+    # new_email = click.prompt("Nouveau email ", default="", show_default=False)
+    new_email = prompt_until_valid("Email", check_email, "Email invalide")
     new_name = click.prompt("Nouveau nom ", default="", show_default=False)
-    role_name = click.prompt("Nouveau rôle (commercial / support / gestion) ", default="", show_default=False)
+    role_name = prompt_until_valid("Role", check_role, "Role invalide")
     new_password = click.prompt("Nouveau mot de passe ",
                                 hide_input=True, confirmation_prompt=True, default="", show_default=False)
 
@@ -159,7 +170,7 @@ def delete_user(user):
     for u in users:
         click.echo(f"  ID: {u.id} | Numéro: {u.employee_number} | Nom: {u.name} | Rôle: {u.role.name}")
 
-    user_id = click.prompt("ID de l'utilisateur à supprimer", type=int)
+    user_id = prompt_until_valid("ID de l'utilisateur à supprimer", check_number, "ID invalide")
     target_user = session.get(User, user_id)
     if not target_user:
         click.echo("❌ Utilisateur non trouvé")
@@ -183,9 +194,9 @@ def add_client(user):
     """Ajouter un nouveau client (auth requis)."""
 
     name = click.prompt("Nom du client")
-    email = click.prompt("Email")
-    phone = click.prompt("Téléphone")
-    company = click.prompt("Entreprise")
+    email = prompt_until_valid("Email", check_email, "Email invalide")
+    phone = prompt_until_valid("Téléphone", check_phone, "Téléphone invalide")
+    company = prompt_until_valid("Entreprise", check_company, "Entreprise invalide")
     session = SessionLocal()
     client = Client(
         name=name,
@@ -220,7 +231,7 @@ def update_client(user):
     for c in clients:
         click.echo(f"  ID: {c.id} | Nom: {c.name} | Email: {c.email} | Téléphone: {c.phone}")
 
-    client_id = click.prompt("ID du client à modifier", type=int)
+    client_id = prompt_until_valid("ID du client à modifier", check_number, "ID invalide")
     client = session.query(Client).filter_by(id=client_id, sales_contact=user.get('name')).first()
 
     if not client:
@@ -229,11 +240,10 @@ def update_client(user):
         return
 
     click.echo(f"\n🔧 Modification du client : {client.name}")
-    # Prompts avec valeur par défaut pour modification
     new_name = click.prompt("Nom", default=client.name, show_default=True)
-    new_email = click.prompt("Email", default=client.email, show_default=True)
-    new_phone = click.prompt("Téléphone", default=client.phone, show_default=True)
-    new_company = click.prompt("Entreprise", default=client.company, show_default=True)
+    new_email = prompt_until_valid("Email", check_email, "Email invalide")
+    new_phone = prompt_until_valid("Téléphone", check_phone, "Téléphone invalide")
+    new_company = prompt_until_valid("Entreprise", check_company, "Entreprise invalide")
 
     client.name = new_name
     client.email = new_email
@@ -257,10 +267,11 @@ def add_contract(user):
     click.echo("\n=== Clients ===")
     for c in clients:
         click.echo(f"- {c.id}: {c.name} ({c.email})")
-    client_id = click.prompt("ID du client")
-    amount_total = click.prompt("Montant total")
-    amount_remaining = click.prompt("Montant restant")
-    status = click.prompt("Statut (ex: signed, pending)")
+
+    client_id = prompt_until_valid("ID du client", check_number, "ID invalide")
+    amount_total = prompt_until_valid("Montant total", check_amount, "Montant invalide")
+    amount_remaining = prompt_until_valid("Montant restant", check_amount, "Montant invalide")
+    status = prompt_until_valid("Statut (ex: signed, pending)", check_status, "Statut invalide")
 
     client = session.get(Client, client_id)
     if not client:
@@ -289,7 +300,6 @@ def add_contract(user):
 def update_contract(user):
     """Modifier un contrat existant (gestion = tous, commercial = uniquement les siens)"""
     session = SessionLocal()
-    # Récupérer le nom du rôle
     user_role = user.get('role')
 
     if user_role == "gestion":
@@ -308,7 +318,7 @@ def update_contract(user):
     for c in contracts:
         click.echo(f"  ID: {c.id} | Client ID: {c.client_id} | Montant: {c.amount_total} | Statut: {c.status}")
 
-    contract_id = click.prompt("ID du contrat à modifier")
+    contract_id = prompt_until_valid("ID du contrat à modifier", check_number, "ID invalide")
 
     contract = session.get(Contract, contract_id)
     if not contract:
@@ -320,14 +330,11 @@ def update_contract(user):
         click.echo("❌ Vous ne pouvez modifier que vos propres contrats.")
         return
 
-    # Afficher les statuts disponibles (exemple)
     VALID_STATUSES = ["new", "pending", "signed", "cancelled"]
     click.echo(f"📌 Statuts disponibles : {', '.join(VALID_STATUSES)}")
     click.echo(f"🔎 Contrat actuel : {contract}")
-    # Prompts facultatifs — laisser vide pour ne pas modifier
-    new_amount_total = click.prompt("Nouveau montant total", default=contract.amount_total, show_default=True)
-    new_amount_remaining = click.prompt("Nouveau montant restant",
-                                        default=contract.amount_remaining, show_default=True)
+    new_amount_total = prompt_until_valid("Nouveau montant total", check_amount, "Montant invalide")
+    new_amount_remaining = prompt_until_valid("Nouveau montant restant", check_amount, "Montant invalide")
 
     while True:
         new_status = click.prompt("Nouveau statut", default=contract.status, show_default=True)
@@ -399,7 +406,7 @@ def add_event(user):
     for c in contracts:
         click.echo(f"  ID: {c.id} | Client: {c.client.name} | Montant: {c.amount_total} €")
 
-    contract_id = click.prompt("ID du contrat", type=int)
+    contract_id = prompt_until_valid("ID du contrat", check_number, "ID invalide")
     contract = session.query(Contract).filter_by(
         id=contract_id, status="signed", sales_contact=user.get("name")
     ).first()
@@ -420,8 +427,7 @@ def add_event(user):
     for su in support_users:
         click.echo(f"  ID: {su.id} | Nom: {su.name} | Email: {su.email}")
 
-    support_contact_input = click.prompt("ID du contact support (laisser vide si aucun)",
-                                         default="", show_default=False)
+    support_contact_input = click.prompt("ID du contact support", default="", show_default=False)
 
     if support_contact_input.strip() == "":
         support_contact_name = None
@@ -439,10 +445,10 @@ def add_event(user):
             session.close()
             return
 
-    start_days = click.prompt("Jours à partir d'aujourd'hui pour START", type=int)
-    end_days = click.prompt("Jours à partir d'aujourd'hui pour END", type=int)
+    start_days = prompt_until_valid("Jours à partir d'aujourd'hui pour START", check_number, "Nombre invalide")
+    end_days = prompt_until_valid("Jours à partir d'aujourd'hui pour END", check_number, "Nombre invalide")
     location = click.prompt("Lieu")
-    attendees = click.prompt("Nombre de participants", type=int)
+    attendees = prompt_until_valid("Nombre de participants", check_number, "Nombre invalide")
     notes = click.prompt("Notes")
 
     client = contract.client
@@ -473,7 +479,6 @@ def update_event(user):
     session = SessionLocal()
     user_role = user.get('role')
 
-    # Filtrer les événements selon le rôle
     if user_role == "gestion":
         events = session.query(Event).all()
     elif user_role == "support":
@@ -490,7 +495,7 @@ def update_event(user):
     for e in events:
         click.echo(f"  ID: {e.id} | Client: {e.client_name} | Lieu: {e.location}")
 
-    event_id = click.prompt("ID de l'événement à modifier", type=int)
+    event_id = prompt_until_valid("ID de l'événement à modifier", check_number, "ID invalide")
     event = session.get(Event, event_id)
     if not event:
         click.echo("❌ Événement non trouvé.")
@@ -500,16 +505,13 @@ def update_event(user):
         click.echo("⛔️ Vous ne pouvez modifier que les événements où vous êtes le contact support.")
         return
 
-    # Prompts facultatifs — appuyer sur Entrée pour ne pas modifier
-    start_input = click.prompt("Jours à partir d'aujourd'hui nouvelle date de début", default="", show_default=False)
-    end_input = click.prompt("Jours à partir d'aujourd'hui nouvelle date de fin", default="", show_default=False)
-
-    new_start_days = int(start_input) if start_input.strip().isdigit() else None
-    new_end_days = int(end_input) if end_input.strip().isdigit() else None
-
+    start_days = click.prompt("Jours à partir d'aujourd'hui nouvelle date de début", default="", show_default=False)
+    end_days = click.prompt("Jours à partir d'aujourd'hui nouvelle date de fin", default="", show_default=False)
+    new_start_days = int(start_days) if start_days.strip().isdigit() else None
+    new_end_days = int(end_days) if end_days.strip().isdigit() else None
     new_support = click.prompt("Nouveau contact support", default=event.support_contact, show_default=True)
     new_location = click.prompt("Nouveau lieu", default=event.location, show_default=True)
-    new_attendees = click.prompt("Nouveau nombre de participants", default=event.attendees, show_default=True)
+    new_attendees = prompt_until_valid("Nouveau nombre de participants", check_number, "Nombre invalide")
     new_notes = click.prompt("Nouvelles notes", default=event.notes, show_default=True)
 
     if new_start_days is not None:
@@ -552,8 +554,6 @@ def list_events_no_support():
 def list_events_support(user):
     """Lister les évènements assignés à l'utilisateur support"""
     session = SessionLocal()
-
-    # Récupération des événements pour ce support uniquement
     events = session.query(Event).filter_by(support_contact=user.get('name')).all()
 
     if not events:
