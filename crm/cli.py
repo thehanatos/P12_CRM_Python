@@ -5,6 +5,7 @@ from .database import SessionLocal, Base, engine
 from .models import Client, Contract, Event, User, Role
 from argon2 import PasswordHasher
 from crm.auth import authenticate_user, get_current_user, require_role, require_auth
+from sqlalchemy import or_
 
 ph = PasswordHasher()
 
@@ -53,12 +54,17 @@ def add_role(name):
 @require_role(["gestion"])
 def add_user(user):
     """Créer un nouvel utilisateur"""
-    employee_number = click.prompt("Numéro d'employé")
+    session = SessionLocal()
+
+    users = session.query(User).all()
+    click.echo("\n📄 Liste des utilisateurs :")
+    for u in users:
+        click.echo(f"  ID: {u.id} | N°: {u.employee_number} | Nom: {u.name} | Rôle: {u.role.name} | Email: {u.email}")
+    employee_number = click.prompt("N° d'employé")
     name = click.prompt("Nom")
     email = click.prompt("Email")
     password = click.prompt("Mot de passe", hide_input=True, confirmation_prompt=True)
     role_name = click.prompt("Rôle (commercial / support / gestion)")
-    session = SessionLocal()
     role = session.query(Role).filter_by(name=role_name).first()
     if not role:
         click.echo(f"❌ Rôle '{role_name}' introuvable.")
@@ -272,6 +278,38 @@ def update_contract(user):
 
     session.commit()
     click.echo(f"✅ Contrat mis à jour : {contract}")
+    session.close()
+
+
+# === Commande : Afficher contrats non signés ou non payés ===
+@cli.command()
+@require_auth
+@require_role(["commercial"])
+def list_contracts_unsigned_unpaid(user):
+    """Afficher les contrats qui ne sont pas signés ou pas payés"""
+    session = SessionLocal()
+
+    # Récupérer les contrats du commercial qui ne sont pas signés OU pas payés
+    contracts = session.query(Contract).filter(
+        Contract.sales_contact == user.get("name"),
+        or_(
+            Contract.status != "signed",
+            Contract.amount_remaining > 0
+        )
+    ).all()
+
+    if not contracts:
+        click.echo("❌ Aucun contrat non signé ou non payé trouvé pour vous.")
+        session.close()
+        return
+
+    click.echo("\n📄 Contrats non signés ou non payés :")
+    for c in contracts:
+        click.echo(
+            f"  ID: {c.id} | Client: {c.client.name} | Montant: {c.amount_total} € | "
+            f"Restant: {c.amount_remaining} € | Statut: {c.status}"
+        )
+
     session.close()
 
 
