@@ -70,6 +70,10 @@ def prompt_until_valid(prompt_text, validator_func, error_msg="Entrée invalide.
 def add_role(name):
     """Créer un nouveau rôle"""
     session = SessionLocal()
+    roles = session.query(Role).all()
+    click.echo("\n📄 Liste des roles :")
+    for r in roles:
+        click.echo(f"- {r.id}: {r.name}")
     role_name = prompt_until_valid("Role", check_role, "Role invalide")
     role = Role(name=role_name)
     session.add(role)
@@ -598,6 +602,7 @@ def list_all():
     clients = session.query(Client).all()
     contracts = session.query(Contract).all()
     events = session.query(Event).all()
+    roles = session.query(Role).all()
 
     click.echo("\n=== Clients ===")
     for c in clients:
@@ -610,6 +615,10 @@ def list_all():
     click.echo("\n=== Événements ===")
     for e in events:
         click.echo(f"- {e.id}: {e.client_name} (Début: {e.event_date_start}, Lieu: {e.location})")
+
+    click.echo("\n=== Roles ===")
+    for r in roles:
+        click.echo(f"- {r.id}: {r.name}")
 
     session.close()
 
