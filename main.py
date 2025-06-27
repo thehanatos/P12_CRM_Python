@@ -5,6 +5,27 @@ from crm.cli import add_client, update_client
 from crm.cli import add_contract, update_contract, list_contracts_unsigned_unpaid
 from crm.cli import add_role, login, logout, whoami
 import sys
+import sentry_sdk
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+print("SENTRY DSN:", os.getenv("SENTRY_DSN"))
+
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    traces_sample_rate=0.0,  # pour activer la journalisation de perfs (optionnel)
+    send_default_pii=True,  # inclure les utilisateurs (optionnel)
+)
+
+
+def simulate_crash():
+    try:
+        1 / 0
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        print("Exception capturée et envoyée à Sentry./n")
 
 
 def menu_admin():
@@ -142,6 +163,7 @@ def menu_contracts():
 
 
 def main():
+    # simulate_crash()
     while True:
         choix = questionary.select(
             "Que voulez-vous gérer ?",
@@ -172,4 +194,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        print(f"❌ Une erreur inattendue est survenue : {e}")
+        raise

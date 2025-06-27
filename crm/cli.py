@@ -8,6 +8,7 @@ from crm.auth import authenticate_user, get_current_user, require_role, require_
 from sqlalchemy import or_
 from tests.validators import check_email, check_phone, check_role, check_company
 from tests.validators import check_number, check_status, check_amount
+import sentry_sdk
 
 ph = PasswordHasher()
 
@@ -114,6 +115,7 @@ def add_user(user):
     user.set_password(password)
     session.add(user)
     session.commit()
+    sentry_sdk.capture_message(f"✅ Utilisateur créé : {user.name} (ID: {user.id})")
     click.echo(f"✅ Utilisateur créé : {user}")
     session.close()
 
@@ -159,6 +161,7 @@ def update_user(user):
         target_user.set_password(new_password)
 
     session.commit()
+    sentry_sdk.capture_message(f"✅ Utilisateur modifié : {user.name} (ID: {user.id})")
     click.echo(f"✅ Utilisateur modifié : {target_user}")
     session.close()
 
@@ -294,6 +297,7 @@ def add_contract(user):
     )
     session.add(contract)
     session.commit()
+    sentry_sdk.capture_message(f"📝 Contrat créé pour client {contract.client.name} (ID: {contract.id})")
     click.echo(f"✅ Contrat créé : {contract}")
     session.close()
 
@@ -353,6 +357,7 @@ def update_contract(user):
     contract.last_updated = datetime.utcnow()
 
     session.commit()
+    sentry_sdk.capture_message(f"📝 Contrat modifié pour client {contract.client.name} (ID: {contract.id})")
     click.echo(f"✅ Contrat mis à jour : {contract}")
     session.close()
 
