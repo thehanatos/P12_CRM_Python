@@ -455,8 +455,9 @@ def add_event(user):
             session.close()
             return
 
-    start_days = prompt_until_valid("Jours à partir d'aujourd'hui pour START", check_number, "Nombre invalide")
-    end_days = prompt_until_valid("Jours à partir d'aujourd'hui pour END", check_number, "Nombre invalide")
+    start_days = int(prompt_until_valid("Jours à partir d'aujourd'hui pour START", check_number, "Nombre invalide"))
+    end_days = int(prompt_until_valid("Jours à partir d'aujourd'hui pour END", check_number, "Nombre invalide"))
+
     location = click.prompt("Lieu")
     attendees = prompt_until_valid("Nombre de participants", check_number, "Nombre invalide")
     notes = click.prompt("Notes")
