@@ -11,8 +11,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-print("SENTRY DSN:", os.getenv("SENTRY_DSN"))
-
 sentry_sdk.init(
     dsn=os.getenv("SENTRY_DSN"),
     traces_sample_rate=0.0,  # pour activer la journalisation de perfs (optionnel)
