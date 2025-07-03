@@ -413,17 +413,23 @@ def add_event(user):
     """Ajouter un événement pour un contrat existant"""
     session = SessionLocal()
 
-    # Récupérer les contrats signés du commercial
-    contracts = session.query(Contract).filter_by(
-        status="signed", sales_contact=user.get("name")
-    ).all()
+    # Récupérer les contrats signés du commercial **sans événement associé**
+    contracts = (
+        session.query(Contract)
+        .filter(
+            Contract.status == "signed",
+            Contract.sales_contact == user.get("name"),
+            ~Contract.events.any()  # <-- filtre : contrats sans event
+        )
+        .all()
+    )
 
     if not contracts:
-        click.echo("❌ Aucun contrat signé trouvé pour vous.")
+        click.echo("❌ Aucun contrat signé sans événement trouvé pour vous.")
         session.close()
         return
 
-    click.echo("\n📄 Contrats signés disponibles :")
+    click.echo("\n📄 Contrats signés sans événement :")
     for c in contracts:
         click.echo(f"  ID: {c.id} | Client: {c.client.name} | Montant: {c.amount_total} €")
 
@@ -434,6 +440,18 @@ def add_event(user):
 
     if not contract:
         click.echo("❌ Contrat introuvable ou non autorisé.")
+        session.close()
+        return
+
+    # Vérifier que le contrat choisi est dans la liste filtrée (sans event)
+    if contract not in contracts:
+        click.echo("❌ Contrat introuvable, non autorisé ou déjà avec un événement.")
+        session.close()
+        return
+
+    existing_event = session.query(Event).filter_by(contract_id=contract.id).first()
+    if existing_event:
+        click.echo("❌ Un événement existe déjà pour ce contrat. Impossible d'en créer un autre.")
         session.close()
         return
 
