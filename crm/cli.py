@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from tests.validators import check_email, check_phone, check_role, check_company
 from tests.validators import check_number, check_status, check_amount
 import sentry_sdk
+from .auth import encrypt_data, decrypt_data
 
 ph = PasswordHasher()
 
@@ -207,9 +208,9 @@ def add_client(user):
     company = prompt_until_valid("Entreprise", check_company, "Entreprise invalide")
     session = SessionLocal()
     client = Client(
-        name=name,
-        email=email,
-        phone=phone,
+        name=encrypt_data(name),
+        email=encrypt_data(email),
+        phone=encrypt_data(str(phone)),
         company=company,
         created_at=datetime.utcnow(),
         last_updated=datetime.utcnow(),
@@ -217,7 +218,7 @@ def add_client(user):
     )
     session.add(client)
     session.commit()
-    click.echo(f"✅ Client créé : {client}")
+    click.echo(f"✅ Client créé : {decrypt_data(client)}")
     session.close()
 
 
@@ -237,7 +238,12 @@ def update_client(user):
 
     click.echo("\n📋 Liste de vos clients :")
     for c in clients:
-        click.echo(f"  ID: {c.id} | Nom: {c.name} | Email: {c.email} | Téléphone: {c.phone}")
+        click.echo(
+            f"  ID: {c.id} | "
+            f"Nom: {decrypt_data(c.name)} | "
+            f"Email: {decrypt_data(c.email)} | "
+            f"Téléphone: {decrypt_data(c.phone)}"
+        )
 
     client_id = prompt_until_valid("ID du client à modifier", check_number, "ID invalide")
     client = session.query(Client).filter_by(id=client_id, sales_contact=user.get('name')).first()
@@ -247,20 +253,21 @@ def update_client(user):
         session.close()
         return
 
-    click.echo(f"\n🔧 Modification du client : {client.name}")
-    new_name = click.prompt("Nom", default=client.name, show_default=True)
+    click.echo(f"\n🔧 Modification du client : {decrypt_data(client.name)}")
+    new_name = click.prompt("Nom", default=decrypt_data(client.name), show_default=True)
     new_email = prompt_until_valid("Email", check_email, "Email invalide")
     new_phone = prompt_until_valid("Téléphone", check_phone, "Téléphone invalide")
     new_company = prompt_until_valid("Entreprise", check_company, "Entreprise invalide")
 
-    client.name = new_name
-    client.email = new_email
-    client.phone = new_phone
-    client.company = new_company
+    client.name = encrypt_data(new_name)
+    client.email = encrypt_data(new_email)
+    client.phone = encrypt_data(new_phone)
+    client.company = encrypt_data(new_company)
+
     client.last_updated = datetime.utcnow()
 
     session.commit()
-    click.echo(f"✅ Client mis à jour : {client.name}")
+    click.echo(f"✅ Client mis à jour : {decrypt_data(client.name)}")
     session.close()
 
 
@@ -274,7 +281,11 @@ def add_contract(user):
     clients = session.query(Client).all()
     click.echo("\n=== Clients ===")
     for c in clients:
-        click.echo(f"- {c.id}: {c.name} ({c.email})")
+        click.echo(
+            f"  ID: {c.id} | "
+            f"Nom: {decrypt_data(c.name)} | "
+            f"Email: {decrypt_data(c.email)} | "
+        )
 
     client_id = prompt_until_valid("ID du client", check_number, "ID invalide")
     amount_total = prompt_until_valid("Montant total", check_amount, "Montant invalide")
@@ -387,7 +398,7 @@ def list_contracts_unsigned_unpaid(user):
     click.echo("\n📄 Contrats non signés ou non payés :")
     for c in contracts:
         click.echo(
-            f"  ID: {c.id} | Client: {c.client.name} | Montant: {c.amount_total} € | "
+            f"  ID: {c.id} | Client: {decrypt_data(c.client.name)} | Montant: {c.amount_total} € | "
             f"Restant: {c.amount_remaining} € | Statut: {c.status}"
         )
 
@@ -465,7 +476,7 @@ def add_event(user):
     client = contract.client
     event = Event(
         contract_id=contract.id,
-        client_name=client.name,
+        client_name=(client.name),
         client_contact=f"{client.phone} | {client.email}",
         event_date_start=datetime.utcnow() + timedelta(days=start_days),
         event_date_end=datetime.utcnow() + timedelta(days=end_days),
@@ -638,6 +649,42 @@ def logout():
         click.echo("✅ Déconnecté(e).")
     except FileNotFoundError:
         click.echo("ℹ️  Aucun token trouvé : vous êtes déjà déconnecté(e).")
+
+
+@cli.command()
+def encrypt_existing_clients():
+    """Chiffre les données clients non encore chiffrées"""
+    from crm.models import Client
+    from crm.database import SessionLocal
+    from crm.auth import encrypt_data, decrypt_data
+
+    session = SessionLocal()
+    clients = session.query(Client).all()
+    updated_count = 0
+
+    for client in clients:
+        click.echo(f"Client ID {client.id} - Données : " +
+                   f"name={client.name}, email={client.email}, phone={client.phone}, company={client.company}")
+        updated = False
+        click.echo(f"\nClient ID {client.id} - données actuelles :")
+        for field in ['name', 'email', 'phone', 'company']:
+            value = getattr(client, field)
+            click.echo(f"  {field}: {value}")
+            if not value:
+                continue
+            try:
+                decrypt_data(value)
+                click.echo(f"  {field} déjà chiffré")
+            except Exception as e:
+                click.echo(f"  {field} non chiffré ou erreur décryptage ({e}) - chiffrement en cours...")
+                setattr(client, field, encrypt_data(value))
+                updated = True
+        if updated:
+            updated_count += 1
+
+    session.commit()
+    session.close()
+    click.echo(f"\n✅ Données chiffrées pour {updated_count} client(s)")
 
 
 if __name__ == '__main__':

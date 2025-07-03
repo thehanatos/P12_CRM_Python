@@ -8,8 +8,28 @@ from crm.models import User
 from sqlalchemy.orm import joinedload
 import functools
 import click
+from cryptography.fernet import Fernet
+
 
 load_dotenv()
+
+
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+if not ENCRYPTION_KEY:
+    raise RuntimeError("Clé de chiffrement manquante. Ajoutez ENCRYPTION_KEY dans .env.")
+
+fernet = Fernet(ENCRYPTION_KEY.encode())
+
+
+def encrypt_data(plain_text: str) -> str:
+    """Chiffre une chaîne de caractères"""
+    return fernet.encrypt(plain_text.encode()).decode()
+
+
+def decrypt_data(cipher_text: str) -> str:
+    """Déchiffre une chaîne de caractères"""
+    return fernet.decrypt(cipher_text.encode()).decode()
+
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_change_me")
 JWT_ALGO = os.getenv("JWT_ALGO", "HS256")
